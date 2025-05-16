@@ -1,0 +1,314 @@
+image:
+  repository: kong
+  tag: "3.0"
+
+env:
+  database: postgres
+  pg_host: postgres
+  pg_user: kong
+  pg_password: connectsphere
+  pg_database: kong
+  proxy_access_log: /dev/stdout
+  admin_access_log: /dev/stdout
+  proxy_error_log: /dev/stderr
+  admin_error_log: /dev/stderr
+  log_level: debug
+  plugins: bundled,jwt,rate-limiting,http-log,prometheus,cors,request-transformer,response-transformer,ip-restriction,proxy-cache
+  proxy_cache: "on"
+  proxy_cache_response_codes: "200 301 302 404"
+  proxy_cache_timeout: "30s"
+  proxy_cache_storage_size: "128m"
+  nginx_http_proxy_cache_path: "/tmp/cache levels=1:2 keys_zone=cache:10m max_size=128m inactive=60m"
+
+admin:
+  enabled: true
+  http:
+    enabled: true
+    servicePort: 8001
+  tls:
+    enabled: true
+    servicePort: 8444
+
+proxy:
+  enabled: true
+  type: LoadBalancer
+  http:
+    enabled: true
+    servicePort: 80
+    containerPort: 8000
+  tls:
+    enabled: true
+    servicePort: 443
+    containerPort: 8443
+
+postgresql:
+  enabled: true
+  postgresqlUsername: kong
+  postgresqlPassword: connectsphere
+  postgresqlDatabase: kong
+  persistence:
+    size: 5Gi
+
+ingressController:
+  enabled: false
+
+replicaCount: 3
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8100"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - kong
+        topologyKey: kubernetes.io/hostname
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+volumes:
+- name: cache-volume
+  emptyDir: {}
+
+volumeMounts:
+- name: cache-volume
+  mountPath: /tmp/cache
+
+plugins:
+  configMaps:
+  - name: kong-plugin-configs
+    data:
+      rate-limiting: |
+        _format_version: "2.1"
+        plugins:
+        - name: rate-limiting
+          config:
+            minute: 100
+            policy: local
+            limit_by: consumer
+            header_name: "X-Consumer-ID"
+            hide_client_headers: false
+            error_message: "Limite de taux dépassée. Veuillez réessayer plus tard."
+      jwt: |
+        _format_version: "2.1"
+        plugins:
+        - name: jwt
+          config:
+            secret_is_base64: false
+            run_on_preflight: true
+            anonymous: null
+      cors: |
+        _format_version: "2.1"
+        plugins:
+        - name: cors
+          config:
+            origins:
+            - https://connectsphere.com
+            methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+            - PATCH
+            headers:
+            - Content-Type
+            - Authorization
+            - X-Requested-With
+            exposed_headers:
+            - X-Auth-Token
+            credentials: true
+            max_age: 3600
+      ip-restriction: |
+        _format_version: "2.1"
+        plugins:
+        - name: ip-restriction
+          config:
+            allow:
+            - 10.0.0.0/8
+            - 192.168.0.0/16
+            message: "Accès restreint aux adresses IP autorisées"
+      request-transformer: |
+        _format_version: "2.1"
+        plugins:
+        - name: request-transformer
+          config:
+            add:
+              headers:
+              - "X-ConnectSphere-Version:1.0"
+              querystring:
+              - "api_version:1.0"
+            remove:
+              headers:
+              - "X-Powered-By"
+            replace:
+              headers:
+              - "Host:api.connectsphere.com"
+      response-transformer: |
+        _format_version: "2.1"
+        plugins:
+        - name: response-transformer
+          config:
+            add:
+              headers:
+              - "X-ConnectSphere-API:v1.0"
+              json:
+              - "meta.version:1.0"
+              - "meta.generated_at:$(date +%s)"
+            remove:
+              headers:
+              - "Server"
+            replace:
+              json:
+              - "error.message:Une erreur s'est produite"
+              - "error.details:Contactez le support technique"
+      proxy-cache: |
+        _format_version: "2.1"
+        plugins:
+        - name: proxy-cache
+          config:
+            response_code: 200
+            request_method: "GET"
+            content_type: "application/json"
+            cache_ttl: 300
+            strategy: memory
+        - name: proxy-cache
+          config:
+            response_code: 200
+            request_method: "GET"
+            content_type: "application/json"
+            cache_ttl: 600
+            strategy: memory
+          route:
+            name: search-service-route
+        - name: proxy-cache
+          config:
+            response_code: 200
+            request_method: "GET"
+            content_type: "application/json"
+            cache_ttl: 300
+            strategy: memory
+          route:
+            name: circles-service-route
+      error-handler-401: |
+        _format_version: "2.1"
+        plugins:
+        - name: response-transformer
+          config:
+            add:
+              json:
+              - "error.code:401"
+              - "error.message:Authentification échouée"
+              - "error.details:Veuillez vous connecter avec des identifiants valides"
+              headers:
+              - "X-ConnectSphere-Error:auth_failed"
+            remove:
+              headers:
+              - "WWW-Authenticate"
+            replace:
+              json:
+              - "error.status:401"
+            if_status: 401
+      error-handler-403: |
+        _format_version: "2.1"
+        plugins:
+        - name: response-transformer
+          config:
+            add:
+              json:
+              - "error.code:403"
+              - "error.message:Accès refusé"
+              - "error.details:Vous n'avez pas les permissions nécessaires"
+              headers:
+              - "X-ConnectSphere-Error:access_denied"
+            replace:
+              json:
+              - "error.status:403"
+            if_status: 403
+      error-handler-404: |
+        _format_version: "2.1"
+        plugins:
+        - name: response-transformer
+          config:
+            add:
+              json:
+              - "error.code:404"
+              - "error.message:Ressource non trouvée"
+              - "error.details:La ressource demandée n'existe pas"
+              headers:
+              - "X-ConnectSphere-Error:not_found"
+            replace:
+              json:
+              - "error.status:404"
+            if_status: 404
+      error-handler-429: |
+        _format_version: "2.1"
+        plugins:
+        - name: response-transformer
+          config:
+            add:
+              json:
+              - "error.code:429"
+              - "error.message:Trop de requêtes"
+              - "error.details:Veuillez réessayer plus tard"
+              headers:
+              - "X-ConnectSphere-Error:rate_limited"
+              - "Retry-After:60"
+            replace:
+              json:
+              - "error.status:429"
+            if_status: 429
+      error-handler-500: |
+        _format_version: "2.1"
+        plugins:
+        - name: response-transformer
+          config:
+            add:
+              json:
+              - "error.code:500"
+              - "error.message:Erreur interne du serveur"
+              - "error.details:Une erreur s'est produite lors du traitement de votre requête"
+              headers:
+              - "X-ConnectSphere-Error:server_error"
+            replace:
+              json:
+              - "error.status:500"
+            if_status: 500
+      http-log: |
+        _format_version: "2.1"
+        plugins:
+        - name: http-log
+          config:
+            http_endpoint: http://logging-service:8080
+            method: POST
+            timeout: 10000
+            keepalive: 60000
+            content_type: application/json
+            log_level: debug
+            successful_severity: info
+            client_errors_severity: error
+            server_errors_severity: critical
+      prometheus: |
+        _format_version: "2.1"
+        plugins:
+        - name: prometheus 

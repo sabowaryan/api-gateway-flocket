@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-proxy
+  namespace: flocket
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8100"
+spec:
+  selector:
+    app: kong
+  type: LoadBalancer
+  ports:
+  - name: proxy
+    port: 80
+    targetPort: 8000
+  - name: proxy-ssl
+    port: 443
+    targetPort: 8443
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-admin
+  namespace: flocket
+spec:
+  selector:
+    app: kong
+  type: ClusterIP
+  ports:
+  - name: admin
+    port: 8001
+    targetPort: 8001
+  - name: admin-ssl
+    port: 8444
+    targetPort: 8444
+  - name: metrics
+    port: 8100
+    targetPort: 8100 
