@@ -1,0 +1,10 @@
+_format_version: "2.1"
+plugins:
+  - name: http-log
+    config:
+      http_endpoint: http://log-service:3500/logs
+      method: POST
+      timeout: 1000
+      keepalive: 1000
+      queue_size: 10
+      flush_timeout: 2 

@@ -1,145 +1,124 @@
 # API Gateway Flocket
 
-Cette API Gateway est basée sur Kong et déployée dans un environnement Kubernetes pour le réseau social Flocket.
+Ce projet contient la configuration de l'API Gateway Flocket basé sur Kong.
 
-## Structure des Dossiers
+## Structure du projet
 
-- `config/` : Fichiers de configuration pour Kong
-- `scripts/` : Scripts d'automatisation pour le déploiement et la maintenance
-- `certs/` : Certificats SSL pour sécuriser les communications
-- `manifests/` : Fichiers YAML pour le déploiement Kubernetes
-- `logs/` : Répertoire pour les logs locaux
+```
+.
+├── config/
+│   ├── services.yaml          # Définition des services backend
+│   ├── routes.yaml            # Mapping des URL publiques
+│   └── plugins/               # Configurations des plugins
+├── scripts/
+│   ├── apply-config.sh        # Script d'application des configurations
+│   ├── generate-certs.sh      # Script de génération des certificats
+│   └── backup-config.sh       # Script de sauvegarde
+├── certs/                     # Certificats SSL
+├── manifests/                 # Manifests Kubernetes
+├── logs/                      # Logs (optionnel)
+├── kong.conf                  # Configuration principale
+├── docker-compose.yml         # Orchestration locale
+└── README.md                  # Documentation
+```
 
 ## Prérequis
 
-- Kubernetes cluster opérationnel
-- kubectl configuré pour accéder au cluster
-- Helm (optionnel, pour une installation simplifiée)
+- Docker et Docker Compose
+- Kubernetes (pour le déploiement en production)
+- OpenSSL (pour la génération des certificats)
+- kubectl (pour le déploiement Kubernetes)
 
 ## Installation
 
-### Méthode 1: Déploiement avec kubectl
+### Développement local
 
+1. Générer les certificats SSL :
 ```bash
-# Appliquer les configurations Kubernetes
+./scripts/generate-certs.sh
+```
+
+2. Démarrer les services :
+```bash
+docker-compose up -d
+```
+
+3. Vérifier le statut :
+```bash
+docker-compose ps
+```
+
+### Déploiement Kubernetes
+
+1. Créer le namespace :
+```bash
 kubectl apply -f manifests/namespace.yaml
-kubectl apply -f manifests/postgres.yaml
-kubectl apply -f manifests/kong-config.yaml
-kubectl apply -f manifests/kong-deployment.yaml
-kubectl apply -f manifests/kong-service.yaml
-kubectl apply -f manifests/kong-ingress.yaml
 ```
 
-### Méthode 2: Déploiement avec Helm
-
+2. Appliquer les configurations :
 ```bash
-# Ajouter le repo Helm de Kong
-helm repo add kong https://charts.konghq.com
-helm repo update
-
-# Installer Kong avec les valeurs personnalisées
-helm install kong kong/kong -f config/kong-values.yaml -n flocket
+./scripts/apply-config.sh
 ```
 
-## Configuration des Services
+3. Vérifier le déploiement :
+```bash
+kubectl get pods -n flocket
+```
 
-Les services suivants sont configurés dans l'API Gateway:
-- Authentification: `/auth/*`
-- Gestion des Utilisateurs: `/users/*`
-- Cercles: `/circles/*`
-- Sphères: `/spheres/*`
-- Messagerie: `/messaging/*`
-- Notifications: `/notifications/*`
-- Bien-être Numérique: `/wellbeing/*`
-- Recherche: `/search/*`
+## Configuration
 
-## Sécurité
+### Services
 
-- Toutes les communications sont sécurisées via HTTPS
-- Authentification JWT pour les routes protégées
-- Limitation de taux à 100 requêtes par minute par utilisateur
-- Configuration CORS pour les requêtes cross-origin
-- Restriction IP pour limiter l'accès aux réseaux autorisés (10.0.0.0/8, 192.168.0.0/16)
+Les services sont définis dans `config/services.yaml`. Chaque service doit avoir :
+- Un nom unique
+- Une URL de destination
+- Des routes associées
 
-## Transformation des Requêtes et Réponses
+### Routes
 
-L'API Gateway utilise des plugins de transformation pour:
-- **Requêtes**: Ajouter des en-têtes personnalisés, paramètres de requête et modifier les en-têtes existants
-- **Réponses**: Standardiser les formats de réponse, ajouter des métadonnées et personnaliser les messages d'erreur
+Les routes sont définies dans `config/routes.yaml`. Chaque route doit avoir :
+- Un nom unique
+- Un chemin d'accès
+- Un service associé
 
-## Gestion des Erreurs
+### Plugins
 
-L'API Gateway fournit des réponses d'erreur standardisées pour une meilleure expérience utilisateur:
-
-| Code | Type d'erreur | Message | En-tête spécifique |
-|------|--------------|---------|-------------------|
-| 401 | Authentification échouée | Veuillez vous connecter avec des identifiants valides | X-Flocket-Error: auth_failed |
-| 403 | Accès refusé | Vous n'avez pas les permissions nécessaires | X-Flocket-Error: access_denied |
-| 404 | Ressource non trouvée | La ressource demandée n'existe pas | X-Flocket-Error: not_found |
-| 429 | Trop de requêtes | Veuillez réessayer plus tard | X-Flocket-Error: rate_limited, Retry-After: 60 |
-| 500 | Erreur interne | Une erreur s'est produite lors du traitement de votre requête | X-Flocket-Error: server_error |
-
-Les logs détaillés sont configurés avec différents niveaux de sévérité pour faciliter le diagnostic:
-- Requêtes réussies: `info`
-- Erreurs client: `error`
-- Erreurs serveur: `critical`
-
-## Scalabilité et Performance
-
-L'API Gateway est conçue pour gérer un trafic élevé avec les fonctionnalités suivantes:
-
-### Architecture Hautement Disponible
-- Déploiement en mode cluster avec 3 réplicas minimum
-- Autoscaling horizontal basé sur l'utilisation CPU (70%) et mémoire (80%)
-- Capacité de montée en charge jusqu'à 10 réplicas selon la charge
-- Anti-affinité des pods pour assurer la répartition sur différents nœuds
-
-### Mise en Cache
-- Mise en cache activée pour les requêtes GET fréquentes
-- Configuration de cache spécifique par service:
-  - Cache global: TTL de 300 secondes pour les requêtes GET standards
-  - Service de recherche: TTL de 600 secondes pour les résultats de recherche
-  - Service de cercles: TTL de 300 secondes pour les données sociales fréquemment consultées
-- Stockage de cache de 128 Mo avec une durée d'inactivité de 60 minutes
-
-### Load Balancer
-- Service de type LoadBalancer pour distribuer le trafic entrant
-- Répartition de charge entre les instances Kong
+Les plugins sont configurés dans `config/plugins/`. Les plugins disponibles sont :
+- JWT : Authentification
+- Rate Limiting : Limitation de débit
+- CORS : Gestion des requêtes cross-origin
+- HTTP Log : Journalisation
+- Prometheus : Monitoring
 
 ## Maintenance
 
-### Renouvellement des Certificats SSL
+### Sauvegarde
 
+Pour sauvegarder la configuration :
 ```bash
-# Exécuter le script de renouvellement des certificats
-./scripts/renew-certs.sh
+./scripts/backup-config.sh
 ```
 
-### Mise à jour de la Configuration
+### Renouvellement des certificats
 
+Pour renouveler les certificats SSL :
 ```bash
-# Appliquer les nouvelles configurations
-kubectl apply -f manifests/kong-config.yaml
+./scripts/generate-certs.sh
 ```
 
-### Surveillance
+## Monitoring
 
-Les métriques Prometheus sont exposées sur le port 8100 et peuvent être visualisées via Grafana.
-
-## Dépannage
-
-Consulter les logs:
+L'API Gateway expose des métriques Prometheus sur le port 8001 :
 ```bash
-kubectl logs -f deployment/kong -n flocket
+curl http://localhost:8001/metrics
 ```
 
-## Monitoring et Journalisation
+## Sécurité
 
-Pour configurer le monitoring et la journalisation:
+- Les certificats SSL sont stockés dans `certs/`
+- Les secrets sont gérés via Kubernetes
+- L'accès à l'API Admin est restreint
 
-```bash
-# Installer Prometheus, Grafana et ELK Stack
-./scripts/setup-monitoring.sh
-```
+## Support
 
-Pour plus d'informations, consulter la [documentation officielle de Kong](https://docs.konghq.com/). 
+Pour toute question ou problème, veuillez contacter l'équipe Flocket. 

@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-config
+  namespace: flocket
+data:
+  kong.conf: |
+    # Configuration principale de Kong
+    database = postgres
+    pg_host = postgres
+    pg_user = kong
+    admin_listen = 0.0.0.0:8001
+    proxy_listen = 0.0.0.0:8000, 0.0.0.0:8443 ssl
+    ssl_cert = /etc/kong/ssl/kong.crt
+    ssl_cert_key = /etc/kong/ssl/kong.key
+    log_level = info
+    plugins = bundled,jwt,rate-limiting,cors,http-log,prometheus
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-plugins
+  namespace: flocket
+data:
+  jwt.yaml: |
+    _format_version: "2.1"
+    plugins:
+      - name: jwt
+        config:
+          key_claim_name: iss
+          claims_to_verify:
+            - exp
+          maximum_expiration: 86400
+  rate-limiting.yaml: |
+    _format_version: "2.1"
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          hour: 1000
+          policy: local
+  cors.yaml: |
+    _format_version: "2.1"
+    plugins:
+      - name: cors
+        config:
+          origins: "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+  http-log.yaml: |
+    _format_version: "2.1"
+    plugins:
+      - name: http-log
+        config:
+          http_endpoint: http://log-service:3500/logs
+          method: POST
+  prometheus.yaml: |
+    _format_version: "2.1"
+    plugins:
+      - name: prometheus
+        config: {} 

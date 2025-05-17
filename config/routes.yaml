@@ -1,0 +1,57 @@
+_format_version: "2.1"
+routes:
+  # Routes d'authentification
+  - name: auth-route
+    paths:
+      - /auth
+    service: auth-service
+    strip_path: true
+
+  # Routes utilisateurs
+  - name: users-route
+    paths:
+      - /users
+    service: users-service
+    strip_path: true
+
+  # Routes cercles
+  - name: circles-route
+    paths:
+      - /circles
+    service: circles-service
+    strip_path: true
+
+  # Routes sphères
+  - name: spheres-route
+    paths:
+      - /spheres
+    service: spheres-service
+    strip_path: true
+
+  # Routes messagerie
+  - name: messaging-route
+    paths:
+      - /messaging
+    service: messaging-service
+    strip_path: true
+
+  # Routes notifications
+  - name: notifications-route
+    paths:
+      - /notifications
+    service: notifications-service
+    strip_path: true
+
+  # Routes bien-être
+  - name: wellbeing-route
+    paths:
+      - /wellbeing
+    service: wellbeing-service
+    strip_path: true
+
+  # Routes recherche
+  - name: search-route
+    paths:
+      - /search
+    service: search-service
+    strip_path: true 

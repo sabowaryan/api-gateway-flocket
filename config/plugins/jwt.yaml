@@ -1,0 +1,21 @@
+_format_version: "2.1"
+plugins:
+  - name: jwt
+    config:
+      key_claim_name: iss
+      claims_to_verify:
+        - exp
+      maximum_expiration: 86400
+      header_names:
+        - Authorization
+      key_in_header: true
+      key_in_body: false
+      key_in_query: false
+      run_on_preflight: true
+      maximum_ttl: 86400
+      algorithm: HS256
+      secret_is_base64: false
+      uri_param_names:
+        - jwt
+      cookie_names:
+        - jwt 

@@ -4,13 +4,13 @@ metadata:
   name: kong-ingress
   namespace: flocket
   annotations:
-    kubernetes.io/ingress.class: "nginx"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    kubernetes.io/ingress.class: "kong"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   tls:
   - hosts:
     - api.flocket.com
-    secretName: kong-ssl
+    secretName: kong-tls
   rules:
   - host: api.flocket.com
     http:
